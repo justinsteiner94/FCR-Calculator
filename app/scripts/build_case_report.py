@@ -190,22 +190,16 @@ def write_average_cycle_formulas(
 def main(
     report_file,
     report_datetime: datetime,
-    outstanding_val: float,
-    outstanding_color: str,
-    exceeds_val: float,
-    exceeds_color: str,
-    competent_val: float,
-    competent_color: str,
-    needs_improvement_color: str,
+    meets_val: float,
+    meets_color: str,
+    does_not_meet_color: str,
 ):
 
     follow_up_weight_map = load_follow_up_and_weight_map()
 
     weight_performance_map: dict[float | str, str] = {
-        float(outstanding_val): outstanding_color,
-        float(exceeds_val): exceeds_color,
-        float(competent_val): competent_color,
-        "default": needs_improvement_color,
+        float(meets_val): meets_color,
+        "default": does_not_meet_color,
     }
 
     wb = open_workbook(report_file, "Case Report")
