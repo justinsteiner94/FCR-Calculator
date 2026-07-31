@@ -104,7 +104,7 @@ with case_report_tab:
 
             col1, col2 = st.columns(2)
             meets_color = col2.color_picker("Meets Color", value="#92D050", label_visibility="hidden")
-            outstanding_val = col1.slider(
+            meets_val = col1.slider(
                 "Meets", value=0.91, min_value=0.0, max_value=5.0, step=0.01
             )
 
