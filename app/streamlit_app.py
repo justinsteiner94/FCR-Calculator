@@ -128,8 +128,8 @@ with case_report_tab:
                     new_report_filepath = build_case_report(
                         case_report_file,
                         report_datetime,
-                        meets_color,
                         meets_val,
+                        meets_color,
                         does_not_meet_color,
                     )
 
