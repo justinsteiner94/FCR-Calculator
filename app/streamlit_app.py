@@ -103,28 +103,16 @@ with case_report_tab:
             )
 
             col1, col2 = st.columns(2)
-            outstanding_color = col2.color_picker("Outstanding Color", value="#92D050", label_visibility="hidden")
+            meets_color = col2.color_picker("Meets Color", value="#92D050", label_visibility="hidden")
             outstanding_val = col1.slider(
-                "Outstanding", value=1.0, min_value=0.0, max_value=5.0, step=0.01
+                "Meets", value=0.91, min_value=0.0, max_value=5.0, step=0.01
             )
 
             col1, col2 = st.columns(2)
-            exceeds_color = col2.color_picker("Exeeds Color", value="#FFFF00", label_visibility="hidden")
-            exceeds_val = col1.slider(
-                "Exceeds", value=1.2, min_value=0.0, max_value=5.0, step=0.01
-            )
-
-            col1, col2 = st.columns(2)
-            competent_color = col2.color_picker("Competent Color", value="#FFC000", label_visibility="hidden")
-            competent_val = col1.slider(
-                "Competent", value=2.0, min_value=0.0, max_value=5.0, step=0.01
-            )
-
-            col1, col2 = st.columns(2)
-            needs_improvement_color = col2.color_picker("Needs Improvement Color", value="#FF0000", label_visibility="hidden")
+            does_not_meet_color = col2.color_picker("Does Not Meet", value="#FF0000", label_visibility="hidden")
 
             # this isn't actually used since it's the final threshold, it's just here for display purposes
-            col1.slider("Needs Improvement (default)", value=5.0, disabled=True)
+            col1.slider("Does Not Meet (default)", value=5.0, disabled=True)
 
         case_report_submitted = st.form_submit_button("Format Case Report")
 
