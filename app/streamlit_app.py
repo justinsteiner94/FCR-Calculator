@@ -129,12 +129,8 @@ with case_report_tab:
                         case_report_file,
                         report_datetime,
                         outstanding_val,
-                        outstanding_color,
-                        exceeds_val,
-                        exceeds_color,
-                        competent_val,
-                        competent_color,
-                        needs_improvement_color,
+                        meets_color,
+                        does_not_meet_color,
                     )
 
                 except ValueError as e:
