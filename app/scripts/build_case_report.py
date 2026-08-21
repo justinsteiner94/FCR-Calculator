@@ -1,4 +1,3 @@
-st.write("Streamlit version:", st.__version__)from datetime import datetime
 from tempfile import NamedTemporaryFile
 
 from openpyxl.styles import Alignment
