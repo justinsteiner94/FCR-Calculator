@@ -1,3 +1,4 @@
+st.write("Streamlit version:", st.__version__)
 from datetime import date, datetime, time, timedelta
 from typing import cast
 
