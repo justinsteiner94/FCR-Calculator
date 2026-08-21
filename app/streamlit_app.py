@@ -1,15 +1,16 @@
-import streamlit as st
-
-st.write("Streamlit version:", st.__version__)
 from datetime import date, datetime, time, timedelta
 from typing import cast
+import base64
 
 import streamlit as st
+import streamlit.components.v1 as components
+
 from scripts.build_case_report import main as build_case_report
 from scripts.calculate_first_call_resolution import (
     main as calculate_first_call_resolution,
 )
 from scripts.utils import format_percent
+
 
 st.title("Reporting Tools")
 
@@ -17,31 +18,59 @@ fcr_tab, case_report_tab = st.tabs(
     ["First Call Resolution Calculator", "Case Report Formatter"]
 )
 
+
+# ============================================================
+# FIRST CALL RESOLUTION CALCULATOR
+# ============================================================
+
 with fcr_tab:
     st.header("First Call Resolution Calculator")
+
     calculations: dict[str, int] = {}
 
     with st.form("fcr_calculator"):
         fcr_reopened_file = st.file_uploader(
-            "1. FCR Re-opened Report", type=["xlsx", "xls"]
+            "1. FCR Re-opened Report",
+            type=["xlsx", "xls"],
         )
-        fcr_closed_file = st.file_uploader("2. FCR Closed Report", type=["xlsx", "xls"])
+
+        fcr_closed_file = st.file_uploader(
+            "2. FCR Closed Report",
+            type=["xlsx", "xls"],
+        )
+
         fcr_parent_file = st.file_uploader(
-            "3. FCR Parent Cases Report", type=["xlsx", "xls"]
+            "3. FCR Parent Cases Report",
+            type=["xlsx", "xls"],
         )
 
         st.markdown("---")
 
         report_date = st.date_input(
-            "Report Date", value=datetime.today() - timedelta(days=15)
+            "Report Date",
+            value=datetime.today() - timedelta(days=15),
         )
+
         child_case_threshold = int(
-            st.number_input("Child Case Threshold", value=4, min_value=0)
+            st.number_input(
+                "Child Case Threshold",
+                value=4,
+                min_value=0,
+            )
         )
-        fcr_submitted = st.form_submit_button("Calculate First Call Resolution")
+
+        fcr_submitted = st.form_submit_button(
+            "Calculate First Call Resolution"
+        )
 
         if fcr_submitted:
-            if not all([fcr_reopened_file, fcr_closed_file, fcr_parent_file]):
+            if not all(
+                [
+                    fcr_reopened_file,
+                    fcr_closed_file,
+                    fcr_parent_file,
+                ]
+            ):
                 st.markdown(
                     '<span style="color:red">**All three files are required**</span>',
                     unsafe_allow_html=True,
@@ -71,31 +100,68 @@ with fcr_tab:
         ) / calculations["total_cases"]
 
         _, fcr_column, _ = st.columns(3)
-        fcr_column.metric("First Call Resolution", format_percent(fcr))
+
+        fcr_column.metric(
+            "First Call Resolution",
+            format_percent(fcr),
+        )
 
         with st.expander("See calculated data"):
             st.latex(
                 r"""\frac{closed\ cases - escalated\ cases - child\ cases}{total\ cases}"""
             )
 
-            # we tell streamlit that these values are ints to avoid decimal points, despite their types always being ints
             subcol1, subcol2, subcol3, subcol4 = st.columns(4)
-            subcol1.metric("Closed Case Count", int(calculations["closed_case_count"]))
-            subcol2.metric(
-                "Escalated Case Count", int(calculations["escalated_case_count"])
+
+            subcol1.metric(
+                "Closed Case Count",
+                int(calculations["closed_case_count"]),
             )
-            subcol3.metric("Child Case Count", int(calculations["child_case_count"]))
-            subcol4.metric("Total Cases", int(calculations["total_cases"]))
+
+            subcol2.metric(
+                "Escalated Case Count",
+                int(calculations["escalated_case_count"]),
+            )
+
+            subcol3.metric(
+                "Child Case Count",
+                int(calculations["child_case_count"]),
+            )
+
+            subcol4.metric(
+                "Total Cases",
+                int(calculations["total_cases"]),
+            )
+
+
+# ============================================================
+# CASE REPORT FORMATTER
+# ============================================================
 
 with case_report_tab:
     st.header("Case Report Formatter")
+
     new_report_filepath = ""
 
     with st.form("case_report"):
-        case_report_file = st.file_uploader("Case Report File", type="xlsx")
-        report_date = st.date_input("Report Date")
-        report_time = st.time_input("Report Run Time", time(hour=13))
-        report_datetime = datetime.combine(cast(date, report_date), report_time)
+        case_report_file = st.file_uploader(
+            "Case Report File",
+            type=["xlsx"],
+        )
+
+        report_date = st.date_input(
+            "Report Date"
+        )
+
+        report_time = st.time_input(
+            "Report Run Time",
+            time(hour=13),
+        )
+
+        report_datetime = datetime.combine(
+            cast(date, report_date),
+            report_time,
+        )
 
         with st.expander("Cycle Performance Thresholds"):
             st.markdown(
@@ -105,19 +171,41 @@ with case_report_tab:
                 """
             )
 
+            # Meets threshold and color
             col1, col2 = st.columns(2)
-            meets_color = col2.color_picker("Meets Color", value="#92D050", label_visibility="hidden")
+
             meets_val = col1.slider(
-                "Meets", value=0.91, min_value=0.0, max_value=5.0, step=0.01
+                "Meets",
+                value=0.91,
+                min_value=0.0,
+                max_value=5.0,
+                step=0.01,
             )
 
+            meets_color = col2.color_picker(
+                "Meets Color",
+                value="#92D050",
+                label_visibility="hidden",
+            )
+
+            # Does not meet color
             col1, col2 = st.columns(2)
-            does_not_meet_color = col2.color_picker("Does Not Meet", value="#FF0000", label_visibility="hidden")
 
-            # this isn't actually used since it's the final threshold, it's just here for display purposes
-            col1.slider("Does Not Meet (default)", value=5.0, disabled=True)
+            col1.slider(
+                "Does Not Meet (default)",
+                value=5.0,
+                disabled=True,
+            )
 
-        case_report_submitted = st.form_submit_button("Format Case Report")
+            does_not_meet_color = col2.color_picker(
+                "Does Not Meet",
+                value="#FF0000",
+                label_visibility="hidden",
+            )
+
+        case_report_submitted = st.form_submit_button(
+            "Format Case Report"
+        )
 
         if case_report_submitted:
             if not case_report_file:
@@ -128,12 +216,21 @@ with case_report_tab:
 
             else:
                 try:
+                    # IMPORTANT:
+                    # The arguments are now in the correct order:
+                    #
+                    # report_file
+                    # report_datetime
+                    # meets_val
+                    # meets_color
+                    # does_not_meet_color
+
                     new_report_filepath = build_case_report(
-                        case_report_file,
-                        report_datetime,
-                        meets_val,
-                        meets_color,
-                        does_not_meet_color,
+                        report_file=case_report_file,
+                        report_datetime=report_datetime,
+                        meets_val=meets_val,
+                        meets_color=meets_color,
+                        does_not_meet_color=does_not_meet_color,
                     )
 
                 except ValueError as e:
@@ -142,12 +239,50 @@ with case_report_tab:
                         unsafe_allow_html=True,
                     )
 
-    if new_report_filepath:
-        col1, col2, col3 = st.columns(3)
+
+# ============================================================
+# AUTOMATIC DOWNLOAD
+# ============================================================
+
+if new_report_filepath:
+    try:
         with open(new_report_filepath, "rb") as f:
-            col2.download_button(
-                "Download your formatted Case Report",
-                f,
-                file_name=f"Workload Management Report {report_datetime.strftime('%-m-%-d-%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            file_data = f.read()
+
+        file_base64 = base64.b64encode(file_data).decode()
+
+        file_name = (
+            "Workload Management Report "
+            f"{report_datetime.strftime('%-m-%-d-%Y')}.xlsx"
+        )
+
+        # Trigger the browser download automatically.
+        components.html(
+            f"""
+            <script>
+                const fileData =
+                    "data:application/vnd.openxmlformats-officedocument."
+                    + "spreadsheetml.sheet;base64,{file_base64}";
+
+                const link = document.createElement("a");
+
+                link.href = fileData;
+                link.download = "{file_name}";
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            </script>
+            """,
+            height=0,
+        )
+
+        st.success(
+            f"Case Report formatted successfully. "
+            f"Your download should begin automatically."
+        )
+
+    except Exception as e:
+        st.error(
+            f"Unable to automatically download the formatted report: {e}"
+        )
