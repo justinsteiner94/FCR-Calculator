@@ -1,144 +1,152 @@
-from typing import Any, List, Optional, Tuple
-
-from dateutil.parser import parse as parse_date
-
-from scripts.utils import open_workbook
 
 
-def format_row(headers, row, report_date_column, is_reopened) -> dict[str, Any]:
-    return {
-        "datetime": row[headers.index(report_date_column)].value,
-        "case_number": row[headers.index("Case Number")].value,
-        "case_owner": row[headers.index("Case Owner")].value,
-        "status": row[headers.index("Status")].value,
-        "is_open": bool(int(row[headers.index("Open")].value)),
-        "is_closed": bool(int(row[headers.index("Closed")].value)),
-        "was_escalated": bool(int(row[headers.index("Was Escalated")].value)),
-        "is_reopened": is_reopened,
-    }
+from datetime import date, datetime, time, timedelta
+from typing import cast
 
+import streamlit as st
+from scripts.build_case_report import main as build_case_report
+from scripts.calculate_first_call_resolution import (
+    main as calculate_first_call_resolution,
+)
+from scripts.utils import format_percent
 
-def get_cases(
-    report_date, report_file, report_date_column, is_reopened, file_display_name
-) -> List[dict[str, Any]]:
+st.title("Reporting Tools")
 
-    wb = open_workbook(report_file, file_display_name)
-    ws = wb.active
+fcr_tab, case_report_tab = st.tabs(
+    ["First Call Resolution Calculator", "Case Report Formatter"]
+)
 
-    try:
-        cases = []
-        for i, row in enumerate(ws.rows):
-            if not i:
-                headers = [c.value for c in row]
-                report_date_index = headers.index(report_date_column)
-                continue
+with fcr_tab:
+    st.header("First Call Resolution Calculator")
+    calculations: dict[str, int] = {}
 
-            timestamp_cell = row[report_date_index]
-            if isinstance(timestamp_cell.value, str):
-                timestamp_cell.value = parse_date(timestamp_cell.value)
-
-            if timestamp_cell.value.date() != report_date:
-                continue
-
-            cases.append(format_row(headers, row, report_date_column, is_reopened))
-
-        return cases
-
-    except ValueError as e:
-        raise ValueError(
-            f"Unable to parse columns for {file_display_name} file; is it in the right format?"
-        ) from e
-
-
-def keep_unique_case_by_newest_datetime(
-    cases: List[dict[str, Any]]
-) -> List[dict[str, Any]]:
-    # sort by case number asc, datetime desc
-    cases.sort(key=lambda x: x["datetime"], reverse=True)
-    cases.sort(key=lambda x: x["case_number"])
-
-    # remove duplicates
-    case_numbers = set()
-    unique_cases: List[dict[str, Any]] = []
-    for case in cases:
-        if case["case_number"] not in case_numbers:
-            case_numbers.add(case["case_number"])
-            unique_cases.append(case)
-
-    return unique_cases
-
-
-def get_child_case_count(report_file, child_case_threshold, whitespace_offset=1) -> int:
-    wb = open_workbook(report_file, file_display_name="Parent Cases Report")
-    ws = wb.active
-    child_case_count: int = 0
-
-    # find the "Subtotal" rows and sum them if they exceed the threshold
-    for row in ws.rows:
-        if row[whitespace_offset].value == "Subtotal":
-            case_count = row[whitespace_offset + 2].value
-            if case_count >= child_case_threshold:
-                child_case_count += case_count
-
-    return child_case_count
-
-
-def get_closed_and_escalated_cases(
-    cases: List[dict[str, Any]]
-) -> Tuple[List[dict[str, Any]], List[dict[str, Any]]]:
-    # filter to only cases that are not re-opened
-    closed_cases = [case for case in cases if not case["is_reopened"]]
-    escalated_cases = [case for case in closed_cases if case["was_escalated"]]
-
-    return closed_cases, escalated_cases
-
-
-def main(
-    report_date,
-    fcr_reopened_file,
-    fcr_closed_file,
-    fcr_parent_file,
-    child_case_threshold: int,
-    child_case_count_override: Optional[int] = None,
-) -> dict[str, int]:
-
-    cases = get_cases(
-        report_date,
-        fcr_reopened_file,
-        "Edit Date",
-        is_reopened=True,
-        file_display_name="Re-opened Report",
-    )
-
-    cases.extend(
-        get_cases(
-            report_date,
-            fcr_closed_file,
-            "Date/Time Opened",
-            is_reopened=False,
-            file_display_name="Closed Report",
+    with st.form("fcr_calculator"):
+        fcr_reopened_file = st.file_uploader(
+            "1. FCR Re-opened Report", type=["xlsx", "xls"]
         )
-    )
-
-    cases = keep_unique_case_by_newest_datetime(cases)
-
-    if not cases:
-        raise ValueError("No cases found for the given report date")
-
-    child_case_count = (
-        child_case_count_override
-        if child_case_count_override is not None
-        else get_child_case_count(
-            fcr_parent_file,
-            child_case_threshold,
+        fcr_closed_file = st.file_uploader("2. FCR Closed Report", type=["xlsx", "xls"])
+        fcr_parent_file = st.file_uploader(
+            "3. FCR Parent Cases Report", type=["xlsx", "xls"]
         )
-    )
 
-    closed_cases, escalated_cases = get_closed_and_escalated_cases(cases)
+        st.markdown("---")
 
-    return {
-        "closed_case_count": len(closed_cases),
-        "escalated_case_count": len(escalated_cases),
-        "child_case_count": child_case_count,
-        "total_cases": len(cases),
-    }
+        report_date = st.date_input(
+            "Report Date", value=datetime.today() - timedelta(days=15)
+        )
+        child_case_threshold = int(
+            st.number_input("Child Case Threshold", value=4, min_value=0)
+        )
+        fcr_submitted = st.form_submit_button("Calculate First Call Resolution")
+
+        if fcr_submitted:
+            if not all([fcr_reopened_file, fcr_closed_file, fcr_parent_file]):
+                st.markdown(
+                    '<span style="color:red">**All three files are required**</span>',
+                    unsafe_allow_html=True,
+                )
+
+            else:
+                try:
+                    calculations = calculate_first_call_resolution(
+                        report_date,
+                        fcr_reopened_file,
+                        fcr_closed_file,
+                        fcr_parent_file,
+                        child_case_threshold,
+                    )
+
+                except ValueError as e:
+                    st.markdown(
+                        f'<span style="color:red">**Error: _{e}_**</span>',
+                        unsafe_allow_html=True,
+                    )
+
+    if calculations:
+        fcr = (
+            calculations["closed_case_count"]
+            - calculations["escalated_case_count"]
+            - calculations["child_case_count"]
+        ) / calculations["total_cases"]
+
+        _, fcr_column, _ = st.columns(3)
+        fcr_column.metric("First Call Resolution", format_percent(fcr))
+
+        with st.expander("See calculated data"):
+            st.latex(
+                r"""\frac{closed\ cases - escalated\ cases - child\ cases}{total\ cases}"""
+            )
+
+            # we tell streamlit that these values are ints to avoid decimal points, despite their types always being ints
+            subcol1, subcol2, subcol3, subcol4 = st.columns(4)
+            subcol1.metric("Closed Case Count", int(calculations["closed_case_count"]))
+            subcol2.metric(
+                "Escalated Case Count", int(calculations["escalated_case_count"])
+            )
+            subcol3.metric("Child Case Count", int(calculations["child_case_count"]))
+            subcol4.metric("Total Cases", int(calculations["total_cases"]))
+
+with case_report_tab:
+    st.header("Case Report Formatter")
+    new_report_filepath = ""
+
+    with st.form("case_report"):
+        case_report_file = st.file_uploader("Case Report File", type="xlsx")
+        report_date = st.date_input("Report Date")
+        report_time = st.time_input("Report Run Time", time(hour=13))
+        report_datetime = datetime.combine(cast(date, report_date), report_time)
+
+        with st.expander("Cycle Performance Thresholds"):
+            st.markdown(
+                """
+                Values must be in ascending order. Ranges are _non-inclusive_  
+                (e.g. a threshold of 1 means _less than_ 1)
+                """
+            )
+
+            col1, col2 = st.columns(2)
+            meets_color = col2.color_picker("Meets Color", value="#92D050", label_visibility="hidden")
+            meets_val = col1.slider(
+                "Meets", value=0.91, min_value=0.0, max_value=5.0, step=0.01
+            )
+
+            col1, col2 = st.columns(2)
+            does_not_meet_color = col2.color_picker("Does Not Meet", value="#FF0000", label_visibility="hidden")
+
+            # this isn't actually used since it's the final threshold, it's just here for display purposes
+            col1.slider("Does Not Meet (default)", value=5.0, disabled=True)
+
+        case_report_submitted = st.form_submit_button("Format Case Report")
+
+        if case_report_submitted:
+            if not case_report_file:
+                st.markdown(
+                    '<span style="color:red">**Please upload your Case Report file**</span>',
+                    unsafe_allow_html=True,
+                )
+
+            else:
+                try:
+                    new_report_filepath = build_case_report(
+                        case_report_file,
+                        report_datetime,
+                        meets_val,
+                        meets_color,
+                        does_not_meet_color,
+                    )
+
+                except ValueError as e:
+                    st.markdown(
+                        f'<span style="color:red">**Error: _{e}_**</span>',
+                        unsafe_allow_html=True,
+                    )
+
+    if new_report_filepath:
+        col1, col2, col3 = st.columns(3)
+        with open(new_report_filepath, "rb") as f:
+            col2.download_button(
+                "Download your formatted Case Report",
+                f,
+                file_name=f"Workload Management Report {report_datetime.strftime('%-m-%-d-%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
